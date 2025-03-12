@@ -1,8 +1,7 @@
+import os
 import requests
-import json
 from PIL import Image, ImageOps
 import re
-import requests
 import base64
 import io
 import numpy as np
@@ -10,6 +9,19 @@ from PIL import Image, ImageOps
 import torch
 import boto3
 import comfy
+
+def get_proxy_from_env():
+    """
+    proxies: (optional) Dictionary mapping protocol to the URL of the proxy.
+    """
+    http_proxy = next(filter(lambda x: x is not None, [os.getenv("HTTP_PROXY"), os.getenv("http_proxy")]), None)
+    https_proxy = next(filter(lambda x: x is not None, [os.getenv("HTTPS_PROXY"), os.getenv("https_proxy")]), None)
+    if http_proxy is None and https_proxy is None:
+        return None
+    return {
+        "http": http_proxy,
+        "https": https_proxy,
+    }
 
 
 #urls to image from https://github.com/wmatson/easy-comfy-nodes/blob/main/__init__.py#L140
@@ -22,7 +34,7 @@ def loadImageFromUrl(url):
         obj = s3.get_object(Bucket=bucket, Key=key)
         i = Image.open(io.BytesIO(obj['Body'].read()))
     else:
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=5, proxies=get_proxy_from_env())
         if response.status_code != 200:
             raise Exception(response.text)
 
@@ -160,8 +172,8 @@ class GelbooruRandom:
         )
         url = f"{base_url}?{query_params}".replace("-+", "")
         url = re.sub(r"\++", "+", url)
-        
-        response = requests.get(url, verify=True)
+
+        response = requests.get(url, verify=True, proxies=get_proxy_from_env())
 
         if site == "Rule34":
             posts = response.json()
@@ -193,7 +205,7 @@ class GelbooruID:
   
     def get_value(self, post_id):
         url = "https://gelbooru.com/index.php?page=dapi&s=post&q=index&id="+post_id+"&json=1"
-        posts = requests.get(url).json()["post"]
+        posts = requests.get(url, proxies=get_proxy_from_env()).json()["post"]
 
         imgtags = '\n'.join(post.get("tags", "").replace(" ", ", ") for post in posts)
         imgurl = '\n'.join(post.get("file_url", "") for post in posts)
